@@ -5095,12 +5095,6 @@ function rowToTarefa(r) {
 
 const DATA_VERSION = 'v5'; // incrementar ao adicionar campos novos ao modelo
 
-function limparDadosERecarregar() {
-  if(!confirm('Isso vai apagar todos os dados salvos e restaurar os exemplos. Confirmar?')) return;
-  ['cvi_leads','cvi_imoveis','cvi_visitas','cvi_tarefas','cvi_data_version'].forEach(k=>localStorage.removeItem(k));
-  location.reload();
-}
-
 async function carregarDoSheets() {
   atualizarAvatarTopbar();
   showSyncIndicator('⟳ Carregando da nuvem...', true);
