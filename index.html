@@ -537,9 +537,11 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
             <thead><tr>
               <th style="padding-left:14px;width:36px"><input type="checkbox" id="cb-all" onchange="toggleSelectAll(this)"></th>
               <th class="sortable" data-col="nome" onclick="sortLeads('nome')" style="cursor:pointer">Nome <span class="sort-icon"></span></th>
-              <th>Telefone</th><th>Origem</th><th>Interesse</th>
+              <th>Telefone</th>
+              <th class="sortable" data-col="origem" onclick="sortLeads('origem')" style="cursor:pointer">Origem <span class="sort-icon"></span></th>
+              <th class="sortable" data-col="interesse" onclick="sortLeads('interesse')" style="cursor:pointer">Interesse <span class="sort-icon"></span></th>
               <th class="sortable" data-col="status" onclick="sortLeads('status')" style="cursor:pointer">Status <span class="sort-icon"></span></th>
-              <th>Prioridade</th>
+              <th class="sortable" data-col="prioridade" onclick="sortLeads('prioridade')" style="cursor:pointer">Prioridade <span class="sort-icon"></span></th>
               <th class="sortable" data-col="ultimo" onclick="sortLeads('ultimo')" style="cursor:pointer">Último contato <span class="sort-icon"></span></th>
               <th style="padding-right:18px;text-align:right">
                 <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px">
@@ -2510,6 +2512,10 @@ function sortLeads(col){
 }
 function getSorted(list){
   if(!sortCol)return list;
+  if(sortCol==='prioridade'){
+    const ordem={Alta:3,'Média':2,Baixa:1};
+    return [...list].sort((a,b)=>((ordem[a.prioridade]||0)-(ordem[b.prioridade]||0))*sortDir);
+  }
   return [...list].sort((a,b)=>((a[sortCol]||'').localeCompare(b[sortCol]||''))*sortDir);
 }
 
@@ -2547,7 +2553,7 @@ function excluirDefinitivamente(id){
   const l=excluidos.find(x=>x.id===id);if(!l)return;
   if(!confirm('Excluir '+l.nome+' definitivamente? Essa ação não pode ser desfeita e o cliente sai do banco de dados.'))return;
   excluidos=excluidos.filter(x=>x.id!==id);exclSelectedIds.delete(id);
-  renderExcluidos();updateExclBadge();gsSaveLeads();
+  renderExcluidos();updateExclBadge();gsSaveLeads();gsDeleteRow('clientes',id);
 }
 
 // ── SELECTION ──
@@ -4248,7 +4254,7 @@ function updateExclSelPanel(){const panel=document.getElementById('excl-sel-pane
 function clearExclSelection(){exclSelectedIds.clear();document.querySelectorAll('.excl-cb').forEach(cb=>cb.checked=false);const all=document.getElementById('excl-cb-all');if(all)all.checked=false;updateExclSelPanel();}
 function copyAllExcluidos(){const nums=excluidos.filter(l=>l.descarteRecontato!=='Número inválido').map(l=>formatPhone(l.tel)).join(', ');navigator.clipboard.writeText(nums).then(()=>alert('Números copiados!')).catch(()=>{});}
 function copyExclNumbers(){const nums=[...exclSelectedIds].map(id=>{const l=excluidos.find(x=>x.id===id);return l?formatPhone(l.tel):null;}).filter(Boolean).join(', ');navigator.clipboard.writeText(nums).then(()=>alert('Copiado!')).catch(()=>{});}
-function clearExcluidos(){if(!excluidos.length)return;if(!confirm('Limpar toda a lista permanentemente?'))return;excluidos=[];exclSelectedIds.clear();renderExcluidos();updateExclBadge();gsSaveLeads();}
+function clearExcluidos(){if(!excluidos.length)return;if(!confirm('Limpar toda a lista permanentemente?'))return;const idsParaExcluir=excluidos.map(l=>l.id);excluidos=[];exclSelectedIds.clear();renderExcluidos();updateExclBadge();gsSaveLeads();Promise.all(idsParaExcluir.map(id=>gsDeleteRow('clientes',id)));}
 
 // ── AGENDA ──
 function agStatusCfg(s){return{agendada:{label:'Agendada',bg:'#EEF1F4',color:'#1E3A52',border:'#D6DEE5'},realizada:{label:'Realizada',bg:'#F3F4F6',color:'#374151',border:'#D1D5DB'},cancelada:{label:'Cancelada',bg:'#FEF2F2',color:'#DC2626',border:'#FECACA'},remarcada:{label:'Remarcada',bg:'#F3F4F6',color:'#4B5563',border:'#D1D5DB'}}[s]||{label:s,bg:'#F3F4F6',color:'#6B7280',border:'#E5E7EB'};}
