@@ -234,7 +234,7 @@ tbody tr:hover td{background:#FAFBFF;cursor:pointer}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:#E5E7EB;border-radius:4px}
 ::-webkit-scrollbar-thumb:hover{background:#D1D5DB}
-.tarefa-item{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-bottom:1px solid #F3F4F6;transition:background .1s;cursor:pointer}
+.tarefa-item{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-bottom:1px solid #F3F4F6;transition:background .1s;cursor:default}
 .tarefa-item:last-child{border-bottom:none}
 .tarefa-item:hover{background:#FAFBFF}
 .tarefa-item.feita .tarefa-titulo{text-decoration:line-through;color:#9CA3AF}
@@ -756,7 +756,6 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
       <div class="modal" style="width:480px">
         <div class="mh"><h2 id="modal-tarefa-titulo">Nova Tarefa</h2><button class="mc" onclick="closeModal('modal-tarefa')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
         <div class="mb">
-          <div id="t-info" style="display:none;font-size:11px;color:#6B7280;margin-bottom:12px"></div>
           <div class="fg"><label>Título da tarefa *</label><input class="fi" id="t-titulo" placeholder="Ex: Ligar para Marina sobre proposta"></div>
           <div class="fg2">
             <div class="fg"><label>Categoria</label>
@@ -776,26 +775,11 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
               </select>
             </div>
           </div>
-          <div class="fg2">
-            <div class="fg"><label>Vencimento</label><input class="fi" id="t-data" type="date"></div>
-            <div class="fg" id="t-status-wrap" style="display:none"><label>Situação</label>
-              <select class="fsel-f" id="t-status">
-                <option value="pendente">Pendente</option>
-                <option value="feita">Concluída</option>
-              </select>
-            </div>
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 12px;align-items:center">
-            <span style="font-size:10.5px;color:#6B7280">Estender prazo:</span>
-            <button type="button" class="bs" style="padding:3px 9px;font-size:11px" onclick="tarefaAdiar(1)">+1 dia</button>
-            <button type="button" class="bs" style="padding:3px 9px;font-size:11px" onclick="tarefaAdiar(3)">+3 dias</button>
-            <button type="button" class="bs" style="padding:3px 9px;font-size:11px" onclick="tarefaAdiar(7)">+1 semana</button>
-            <button type="button" class="bs" style="padding:3px 9px;font-size:11px" onclick="tarefaAdiar(30)">+1 mês</button>
-          </div>
+          <div class="fg"><label>Vencimento</label><input class="fi" id="t-data" type="date"></div>
           <div class="fg"><label>Cliente vinculado <span style="font-size:10px;color:#9CA3AF">(opcional)</span></label><select class="fsel-f" id="t-leadid"><option value="">Nenhum cliente</option></select></div>
-          <div class="fg"><label>Observação</label><textarea class="fta" id="t-obs" style="min-height:120px" placeholder="Detalhes adicionais…"></textarea></div>
+          <div class="fg"><label>Observação</label><textarea class="fta" id="t-obs" placeholder="Detalhes adicionais…"></textarea></div>
         </div>
-        <div class="mf"><button class="bd" id="t-btn-excluir" style="display:none;margin-right:auto" onclick="excluirTarefaDoModal()">Excluir</button><button class="bs" onclick="closeModal('modal-tarefa')">Cancelar</button><button class="bp" id="t-btn-salvar" onclick="salvarTarefa()">Salvar tarefa</button></div>
+        <div class="mf"><button class="bs" onclick="closeModal('modal-tarefa')">Cancelar</button><button class="bp" onclick="salvarTarefa()">Salvar tarefa</button></div>
       </div>
     </div>
 
@@ -4552,7 +4536,6 @@ document.addEventListener('DOMContentLoaded',function(){
 let tarefas = [
 ];
 let tarefaEditId = null;
-let tarefaVoltarLeadId = null; // se a tarefa foi aberta a partir da ficha de um cliente
 const HOJE_ISO = new Date().toISOString().split('T')[0];
 
 const CAT_CORES = {
@@ -4570,23 +4553,8 @@ const PRIOR_CORES = {
 
 function abrirModalTarefa(id) {
   tarefaEditId = id || null;
-  tarefaVoltarLeadId = null;
   const t = id ? tarefas.find(x => x.id === id) : null;
-  document.getElementById('modal-tarefa-titulo').textContent = t ? 'Detalhes da Tarefa' : 'Nova Tarefa';
-  // Elementos exclusivos do modo edição
-  const infoEl = document.getElementById('t-info');
-  if (infoEl) {
-    if (t && t.criadoEm) { infoEl.textContent = 'Criada em ' + t.criadoEm.split('-').reverse().join('/'); infoEl.style.display = 'block'; }
-    else infoEl.style.display = 'none';
-  }
-  const stWrap = document.getElementById('t-status-wrap');
-  if (stWrap) stWrap.style.display = t ? 'flex' : 'none';
-  const stSel = document.getElementById('t-status');
-  if (stSel) stSel.value = t ? (t.status || 'pendente') : 'pendente';
-  const btnEx = document.getElementById('t-btn-excluir');
-  if (btnEx) btnEx.style.display = t ? 'inline-flex' : 'none';
-  const btnSv = document.getElementById('t-btn-salvar');
-  if (btnSv) btnSv.textContent = t ? 'Salvar alterações' : 'Salvar tarefa';
+  document.getElementById('modal-tarefa-titulo').textContent = t ? 'Editar Tarefa' : 'Nova Tarefa';
   document.getElementById('t-titulo').value = t ? t.titulo : '';
   document.getElementById('t-cat').value = t ? t.cat : 'Pessoal';
   document.getElementById('t-prior').value = t ? t.prior : 'Média';
@@ -4600,9 +4568,7 @@ function abrirModalTarefa(id) {
 function salvarTarefa() {
   const titulo = document.getElementById('t-titulo').value.trim();
   if (!titulo) { alert('Informe o título da tarefa.'); return; }
-  const existente = tarefaEditId ? tarefas.find(x => x.id === tarefaEditId) : null;
   const v = {
-    ...(existente || {}),
     id: tarefaEditId || Date.now(),
     titulo,
     cat: document.getElementById('t-cat').value,
@@ -4610,19 +4576,17 @@ function salvarTarefa() {
     data: document.getElementById('t-data').value,
     leadId: parseInt(document.getElementById('t-leadid')?.value)||null,
     obs: document.getElementById('t-obs').value.trim(),
-    status: existente ? (document.getElementById('t-status').value || existente.status || 'pendente') : 'pendente',
-    criadoEm: existente ? (existente.criadoEm || HOJE_ISO) : HOJE_ISO,
+    status: 'pendente',
+    criadoEm: HOJE_ISO,
   };
-  if (existente) {
+  if (tarefaEditId) {
     const idx = tarefas.findIndex(x => x.id === tarefaEditId);
-    if (idx > -1) tarefas[idx] = v;
+    if (idx > -1) { v.status = tarefas[idx].status; tarefas[idx] = v; }
   } else {
     tarefas.push(v);
   }
-  // Ao editar, só volta para a ficha do cliente se a tarefa foi aberta de lá
-  const leadIdSalvo = existente ? tarefaVoltarLeadId : v.leadId;
   tarefaEditId = null;
-  tarefaVoltarLeadId = null;
+  const leadIdSalvo = v.leadId;
   closeModal('modal-tarefa');
   renderTarefas();
   if(typeof renderMobileTarefas==='function') renderMobileTarefas();
@@ -4632,39 +4596,6 @@ function salvarTarefa() {
     openDetail(leadIdSalvo);
     setTimeout(()=>switchDetailTab('tasks'),50);
   }
-}
-
-function tarefaAdiar(dias) {
-  const inp = document.getElementById('t-data');
-  if (!inp) return;
-  const base = inp.value || HOJE_ISO;
-  const d = new Date(base + 'T12:00:00');
-  d.setDate(d.getDate() + dias);
-  const pad = n => String(n).padStart(2, '0');
-  inp.value = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-}
-
-function excluirTarefaDoModal() {
-  if (!tarefaEditId) return;
-  const t = tarefas.find(x => x.id === tarefaEditId);
-  if (!confirm('Excluir a tarefa "' + (t ? t.titulo : '') + '"? Esta ação não pode ser desfeita.')) return;
-  const id = tarefaEditId;
-  const voltar = tarefaVoltarLeadId;
-  tarefaEditId = null;
-  tarefaVoltarLeadId = null;
-  closeModal('modal-tarefa');
-  deletarTarefa(id);
-  if (voltar && leads.find(x => x.id === voltar)) {
-    openDetail(voltar);
-    setTimeout(() => switchDetailTab('tasks'), 50);
-  }
-}
-
-function editarTarefaDoLead(id) {
-  const leadId = currentId;
-  if (g('modal-detail') && g('modal-detail').classList.contains('open')) closeModal('modal-detail');
-  abrirModalTarefa(id);
-  tarefaVoltarLeadId = leadId;
 }
 
 function apagarTodasTarefas() {
@@ -4779,20 +4710,20 @@ function tarefaHTML(t) {
     if (t.data === HOJE_ISO) return `<span style="font-size:10px;color:#4B5563;font-weight:600">Hoje</span>`;
     return `<span style="font-size:10px;color:#6B7280">${d}/${m}</span>`;
   })() : '';
-  return `<div class="tarefa-item ${feita?'feita':''} ${venceClass}" onclick="abrirModalTarefa(${t.id})">
-    <div class="tarefa-cb ${feita?'checked':''}" onclick="event.stopPropagation();toggleTarefa(${t.id})"></div>
+  return `<div class="tarefa-item ${feita?'feita':''} ${venceClass}">
+    <div class="tarefa-cb ${feita?'checked':''}" onclick="toggleTarefa(${t.id})"></div>
     <div style="flex:1;min-width:0">
       <div class="tarefa-titulo">${t.titulo}</div>
       <div class="tarefa-meta">
         <span class="tarefa-cat" style="background:${cat.bg};color:${cat.color};border-color:${cat.border}">${t.cat}</span>
         <span class="tarefa-cat" style="background:${prior.bg};color:${prior.color};border-color:${prior.border}">${t.prior}</span>
         ${dataLabel}
-        ${t.obs ? `<span style="font-size:10.5px;color:#4B5563;font-style:italic;line-height:1.4">${t.obs}</span>` : ''}
+        ${t.obs ? `<span style="font-size:10.5px;color:#9CA3AF;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${t.obs}</span>` : ''}
       </div>
     </div>
     <div style="display:flex;gap:4px;flex-shrink:0">
-      <button class="act-btn" onclick="event.stopPropagation();abrirModalTarefa(${t.id})" title="Ver / editar">✏️</button>
-      <button class="tarefa-del" onclick="event.stopPropagation();deletarTarefa(${t.id})" title="Excluir"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
+      <button class="act-btn" onclick="abrirModalTarefa(${t.id})" title="Editar">✏️</button>
+      <button class="tarefa-del" onclick="deletarTarefa(${t.id})" title="Excluir"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
     </div>
   </div>`;
 }
@@ -5420,11 +5351,11 @@ function renderDetailTasks(){
       const border=vAtrasada?'border-left:3px solid #DC2626;':vHoje?'border-left:3px solid #6B7280;':'';
       const catColor=cats[t.cat]||'#6B7280';
       const dataLabel=t.data?t.data.split('-').reverse().join('/'):'';
-      return`<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;background:${bg};${border}margin-bottom:6px;border:1px solid #E5E7EB;cursor:pointer" onclick="editarTarefaDoLead(${t.id})">
-        <div onclick="event.stopPropagation();toggleTarefa(${t.id});renderDetailTasks()" style="width:17px;height:17px;border-radius:4px;border:2px solid #D1D5DB;flex-shrink:0;margin-top:1px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:${t.status==='feita'?'#1E3A52':'transparent'};border-color:${t.status==='feita'?'#1E3A52':'#D1D5DB'}">${t.status==='feita'?'<span style="color:#fff;font-size:10px;font-weight:700">&#10003;</span>':''}</div>
+      return`<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;background:${bg};${border}margin-bottom:6px;border:1px solid #E5E7EB">
+        <div onclick="toggleTarefa(${t.id});renderDetailTasks()" style="width:17px;height:17px;border-radius:4px;border:2px solid #D1D5DB;flex-shrink:0;margin-top:1px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:${t.status==='feita'?'#1E3A52':'transparent'};border-color:${t.status==='feita'?'#1E3A52':'#D1D5DB'}">${t.status==='feita'?'<span style="color:#fff;font-size:10px;font-weight:700">&#10003;</span>':''}</div>
         <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600;color:#111827;${t.status==='feita'?'text-decoration:line-through;color:#9CA3AF;':''}">${t.titulo}</div>
-        <div style="display:flex;gap:6px;margin-top:3px;flex-wrap:wrap"><span style="font-size:9px;font-weight:600;padding:1px 6px;border-radius:20px;background:${catColor}18;color:${catColor}">${t.cat}</span>${dataLabel?`<span style="font-size:10px;color:${vAtrasada?'#DC2626':vHoje?'#4B5563':'#9CA3AF'}">${vAtrasada?'&#9888; ':vHoje?'&#142A3D; ':''}${dataLabel}</span>`:''}</div>${t.obs?`<div style="font-size:10.5px;color:#4B5563;font-style:italic;margin-top:3px;line-height:1.4">${t.obs}</div>`:''}</div>
-        <button class="tarefa-del" style="width:22px;height:22px;flex-shrink:0;background:#FEF2F2;color:#DC2626;border:1px solid #FEE2E2" onclick="event.stopPropagation();deletarTarefaDetail(${t.id})" title="Excluir tarefa"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg></button></div>`;
+        <div style="display:flex;gap:6px;margin-top:3px;flex-wrap:wrap"><span style="font-size:9px;font-weight:600;padding:1px 6px;border-radius:20px;background:${catColor}18;color:${catColor}">${t.cat}</span>${dataLabel?`<span style="font-size:10px;color:${vAtrasada?'#DC2626':vHoje?'#4B5563':'#9CA3AF'}">${vAtrasada?'&#9888; ':vHoje?'&#142A3D; ':''}${dataLabel}</span>`:''}</div></div>
+        <button class="tarefa-del" style="width:22px;height:22px;flex-shrink:0;background:#FEF2F2;color:#DC2626;border:1px solid #FEE2E2" onclick="deletarTarefaDetail(${t.id})" title="Excluir tarefa"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg></button></div>`;
     }).join('');
 }
 function deletarTarefaDetail(id){
@@ -5867,10 +5798,9 @@ function renderMobileTarefas(){
     return '<div class="mcard">'
       +'<div class="mtask-row">'
       +'<div class="mtask-check'+(done?' checked':'')+'" onclick="mobileToggleTarefa('+t.id+')">'+(done?'✓':'')+'</div>'
-      +'<div style="flex:1;min-width:0;cursor:pointer" onclick="abrirModalTarefa('+t.id+')">'
+      +'<div style="flex:1;min-width:0">'
       +'<div class="mtask-titulo'+(done?' done':'')+'">'+t.titulo+'</div>'
       +'<div class="mcard-sub">'+(dataFmt?dataFmt+' · ':'')+(lead?lead.nome+' · ':'')+'</div>'
-      +(t.obs?'<div class="mcard-sub" style="font-style:italic;color:#4B5563;margin-top:2px">'+t.obs+'</div>':'')
       +'<div style="margin-top:6px;display:flex;gap:6px">'
       +'<span class="mchip" style="background:'+catCfg.bg+';color:'+catCfg.color+'">'+t.cat+'</span>'
       +'<span class="mchip" style="background:'+priorCfg.bg+';color:'+priorCfg.color+'">'+t.prior+'</span>'
