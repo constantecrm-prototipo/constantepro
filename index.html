@@ -1142,14 +1142,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
           <div class="fg" style="margin-bottom:14px"><label>Telefone</label><input class="fi" id="md-telefone" placeholder="(21) 99999-9999" oninput="maskPhone(this)"></div>
           <div style="border-top:1px solid #E5E7EB;margin:6px 0 14px;padding-top:14px">
             <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">🔐 Acesso ao sistema</div>
-            <div class="fg" style="margin-bottom:14px"><label>Novo usuário de login <span style="font-weight:400;color:#9CA3AF">(deixe em branco para manter o mesmo)</span></label><input class="fi" id="md-usuario" placeholder="Ex: artur"></div>
-            <div class="fg" style="margin-bottom:14px"><label>Nova senha <span style="font-weight:400;color:#9CA3AF">(deixe em branco para não alterar)</span></label><input class="fi" id="md-nova-senha" type="password" placeholder="Digite apenas se quiser trocar a senha"></div>
-            <div class="fg" style="margin-bottom:0"><label>Sua senha atual <span style="font-weight:400;color:#DC2626">(obrigatório para confirmar qualquer troca acima)</span></label><input class="fi" id="md-senha-atual" type="password" placeholder="Digite a senha que você usa hoje para entrar"></div>
-          </div>
-          <div style="border-top:1px solid #E5E7EB;margin:6px 0 14px;padding-top:14px">
-            <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">🔑 Recuperação de senha</div>
-            <div class="fg" style="margin-bottom:14px"><label>Crie sua pergunta de segurança</label><input class="fi" id="md-pergunta" placeholder="Ex: Qual o nome do meu primeiro professor?"></div>
-            <div class="fg" style="margin-bottom:0"><label>Crie sua resposta</label><input class="fi" id="md-resposta" placeholder="Digite a resposta que só você sabe"></div>
+            <div class="fg" style="margin-bottom:0"><label>Nova senha <span style="font-weight:400;color:#9CA3AF">(mín. 8 caracteres; deixe em branco para não alterar)</span></label><input class="fi" id="md-nova-senha" type="password" autocomplete="new-password" placeholder="Digite apenas se quiser trocar"></div>
           </div>
         </div>
         <div class="mf mf-between">
@@ -2026,33 +2019,27 @@ try {
   console.error('Erro ao iniciar conexão com o Supabase:', (typeof descreverErroSupabase === 'function' ? descreverErroSupabase(e) : e), e);
 }
 
-// ── CREDENCIAIS DE LOGIN ──
+// ── SESSÃO / MULTI-USUÁRIO (Supabase Auth) ──
+// Cada corretor tem sua própria conta. O banco (RLS) só entrega e só aceita
+// linhas cujo user_id seja o do usuário logado.
+async function getUid(){
+  if(!sbClient) return null;
+  try{
+    const { data } = await sbClient.auth.getSession();
+    return (data && data.session && data.session.user) ? data.session.user.id : null;
+  }catch(e){ return null; }
+}
+function comUid(rows, uid){
+  if(!uid) throw new Error('Sessão expirada — entre novamente.');
+  return rows.map(r => Object.assign({ user_id: uid }, r));
+}
+const CACHE_KEYS = ['cvi_leads','cvi_excluidos','cvi_imoveis','cvi_visitas','cvi_tarefas','cvi_meus_dados','cvi_data_version','cvi_last_backup','cvi_ultimo_modo','cvi_logado','cvi_usuario_logado'];
+
+// ── CREDENCIAIS DE LOGIN (removido: a verificação agora é do Supabase Auth) ──
 // A senha e a resposta de segurança NUNCA são carregadas no navegador —
 // a verificação acontece dentro do Supabase (funções fazer_login,
 // verificar_resposta_seguranca etc.), que só respondem verdadeiro/falso.
-let credenciaisAtuais = {
-  pergunta_seguranca: '',
-  temPergunta: false
-};
-async function carregarCredenciais(tentativa){
-  tentativa = tentativa || 1;
-  try{
-    if(!sbClient) throw new Error('offline');
-    const { data, error } = await sbClient.rpc('obter_pergunta_seguranca');
-    if(error) throw error;
-    credenciaisAtuais.pergunta_seguranca = data || '';
-    credenciaisAtuais.temPergunta = !!(data && data.trim());
-  }catch(e){
-    if(tentativa < 3){
-      // Falha pode ser passageira (ex.: interceptador de rede do ambiente de preview);
-      // tenta novamente algumas vezes antes de desistir.
-      setTimeout(function(){ carregarCredenciais(tentativa + 1); }, 1500);
-      return;
-    }
-    console.warn('Não foi possível carregar a pergunta de segurança da nuvem (o sistema segue funcionando; configure em "Meus dados" se necessário):', descreverErroSupabase(e), e);
-  }
-}
-carregarCredenciais();
+let credenciaisAtuais = { pergunta_seguranca: '', temPergunta: false }; // legado, não usado
 
 // ── FUNÇÕES UTILITÁRIAS GLOBAIS ──
 function g(id){return document.getElementById(id);}
@@ -2288,11 +2275,7 @@ function abrirMeusDados(){
   document.getElementById('md-empresa').value = dados.empresa || '';
   document.getElementById('md-email').value = dados.email || '';
   document.getElementById('md-telefone').value = dados.telefone || '';
-  document.getElementById('md-usuario').value = '';
   document.getElementById('md-nova-senha').value = '';
-  document.getElementById('md-senha-atual').value = '';
-  document.getElementById('md-pergunta').value = credenciaisAtuais.pergunta_seguranca || '';
-  document.getElementById('md-resposta').value = '';
   document.getElementById('modal-meus-dados').classList.add('open');
 }
 async function salvarMeusDados(){
@@ -2306,51 +2289,23 @@ async function salvarMeusDados(){
   localStorage.setItem('cvi_meus_dados', JSON.stringify(dados));
   atualizarAvatarTopbar();
   if (sbClient) {
-    sbClient.from('meus_dados').upsert(Object.assign({id:1}, dados), {onConflict:'id'})
-      .then(function(res){ if(res.error) console.error('Erro ao sincronizar meus dados:', descreverErroSupabase(res.error), res.error); });
+    getUid().then(function(uid){
+      if(!uid) return;
+      return sbClient.from('meus_dados').upsert(Object.assign({user_id:uid}, dados), {onConflict:'user_id'})
+        .then(function(res){ if(res.error) console.error('Erro ao sincronizar meus dados:', descreverErroSupabase(res.error), res.error); });
+    });
   }
 
-  var novoUsuario = document.getElementById('md-usuario').value.trim();
   var novaSenha = document.getElementById('md-nova-senha').value;
-  var senhaAtual = document.getElementById('md-senha-atual').value;
-  var pergunta = document.getElementById('md-pergunta').value.trim();
-  var resposta = document.getElementById('md-resposta').value.trim();
-
-  var mudouAlgumAcesso = !!(novoUsuario || novaSenha || pergunta || resposta);
-
-  if(mudouAlgumAcesso){
-    if(novaSenha && novaSenha.length < 4){
-      alert('A nova senha deve ter pelo menos 4 caracteres. Nada da seção "Acesso ao sistema" foi salvo — tente novamente.');
+  if(novaSenha){
+    if(novaSenha.length < 8){
+      alert('A nova senha deve ter pelo menos 8 caracteres. Seus dados foram salvos, mas a senha NÃO foi alterada.');
       return;
     }
-    if(!senhaAtual){
-      alert('Para alterar usuário, senha ou a pergunta de segurança, informe sua senha ATUAL no campo indicado. Nada da seção "Acesso ao sistema" foi salvo.');
-      return;
-    }
-    if(!sbClient){
-      alert('Sem conexão com a nuvem — usuário/senha/pergunta não puderam ser alterados agora. Tente novamente com internet.');
-      return;
-    }
-    try{
-      const { data, error } = await sbClient.rpc('atualizar_acesso', {
-        p_usuario_atual: localStorage.getItem('cvi_usuario_logado') || '',
-        p_senha_atual: senhaAtual,
-        p_novo_usuario: novoUsuario,
-        p_nova_senha: novaSenha,
-        p_pergunta: pergunta,
-        p_resposta: resposta
-      });
-      if(error) throw error;
-      if(data !== true){
-        alert('Senha atual incorreta — nada da seção "Acesso ao sistema" foi alterado.');
-        return;
-      }
-      if(novoUsuario) localStorage.setItem('cvi_usuario_logado', novoUsuario);
-      if(pergunta) credenciaisAtuais.pergunta_seguranca = pergunta;
-      credenciaisAtuais.temPergunta = !!(credenciaisAtuais.pergunta_seguranca && credenciaisAtuais.pergunta_seguranca.trim());
-    }catch(e){
-      console.error('Erro ao sincronizar acesso/segurança:', descreverErroSupabase(e), e);
-      alert('Não foi possível salvar acesso/segurança na nuvem agora: '+descreverErroSupabase(e));
+    if(!sbClient){ alert('Sem conexão com a nuvem — a senha não pôde ser alterada agora.'); return; }
+    const { error } = await sbClient.auth.updateUser({ password: novaSenha });
+    if(error){
+      alert('Não foi possível alterar a senha: '+descreverErroSupabase(error));
       return;
     }
   }
@@ -3916,7 +3871,7 @@ async function gsToggleCarteira(id, adding){
   try{
     if (!sbClient) throw new Error('Sem conexão com o banco de dados na nuvem.');
     if(adding){
-      const { error } = await sbClient.from('carteira').upsert({ cliente_id: id }, { onConflict: 'cliente_id' });
+      const { error } = await sbClient.from('carteira').upsert({ user_id: await getUid(), cliente_id: id }, { onConflict: 'user_id,cliente_id' });
       if(error) throw error;
       carteiraIds.add(String(id));
     } else {
@@ -5038,9 +4993,9 @@ async function gsSaveLeads() {
   localStorage.setItem('cvi_excluidos', JSON.stringify(excluidos));
   try {
     if (!sbClient) throw new Error('Sem conexão com o banco de dados na nuvem.');
-    const rows = leads.map(l => appLeadToDbRow(l, false)).concat(excluidos.map(l => appLeadToDbRow(l, true)));
+    const rows = comUid(leads.map(l => appLeadToDbRow(l, false)).concat(excluidos.map(l => appLeadToDbRow(l, true))), await getUid());
     if (rows.length) {
-      const { error } = await sbClient.from('clientes').upsert(rows, { onConflict: 'id' });
+      const { error } = await sbClient.from('clientes').upsert(rows, { onConflict: 'user_id,id' });
       if (error) throw error;
     }
     showSyncIndicator('✓ Sincronizado na nuvem', true);
@@ -5053,9 +5008,9 @@ async function gsSaveImoveis() {
   localStorage.setItem('cvi_imoveis', JSON.stringify(imoveis));
   try {
     if (!sbClient) throw new Error('Sem conexão com o banco de dados na nuvem.');
-    const rows = imoveis.map(appImovelToDbRow);
+    const rows = comUid(imoveis.map(appImovelToDbRow), await getUid());
     if (rows.length) {
-      const { error } = await sbClient.from('imoveis').upsert(rows, { onConflict: 'id' });
+      const { error } = await sbClient.from('imoveis').upsert(rows, { onConflict: 'user_id,id' });
       if (error) throw error;
     }
     showSyncIndicator('✓ Sincronizado na nuvem', true);
@@ -5068,9 +5023,9 @@ async function gsSaveVisitas() {
   localStorage.setItem('cvi_visitas', JSON.stringify(visitas));
   try {
     if (!sbClient) throw new Error('Sem conexão com o banco de dados na nuvem.');
-    const rows = visitas.map(appVisitaToDbRow);
+    const rows = comUid(visitas.map(appVisitaToDbRow), await getUid());
     if (rows.length) {
-      const { error } = await sbClient.from('visitas').upsert(rows, { onConflict: 'id' });
+      const { error } = await sbClient.from('visitas').upsert(rows, { onConflict: 'user_id,id' });
       if (error) throw error;
     }
     showSyncIndicator('✓ Sincronizado na nuvem', true);
@@ -5083,9 +5038,9 @@ async function gsSaveTarefas() {
   localStorage.setItem('cvi_tarefas', JSON.stringify(tarefas));
   try {
     if (!sbClient) throw new Error('Sem conexão com o banco de dados na nuvem.');
-    const rows = tarefas.map(appTarefaToDbRow);
+    const rows = comUid(tarefas.map(appTarefaToDbRow), await getUid());
     if (rows.length) {
-      const { error } = await sbClient.from('tarefas').upsert(rows, { onConflict: 'id' });
+      const { error } = await sbClient.from('tarefas').upsert(rows, { onConflict: 'user_id,id' });
       if (error) throw error;
     }
     showSyncIndicator('✓ Sincronizado na nuvem', true);
@@ -5174,7 +5129,7 @@ async function carregarDoSheets() {
       sbClient.from('imoveis').select('*'),
       sbClient.from('visitas').select('*'),
       sbClient.from('tarefas').select('*'),
-      sbClient.from('meus_dados').select('*').eq('id', 1).maybeSingle(),
+      sbClient.from('meus_dados').select('*').maybeSingle(),
       sbClient.from('carteira').select('cliente_id')
     ]);
     if (clientesRes.error) throw clientesRes.error;
@@ -5501,112 +5456,41 @@ function voltarIdentificacao(){
   irParaPassoRecuperacao(0);
   setTimeout(()=>document.getElementById('rs-usuario').focus(), 50);
 }
+// Passo 0: envia o link de redefinição para o e-mail da conta
 async function avancarIdentificacao(){
-  const u = document.getElementById('rs-usuario').value.trim();
-  const erroEl = document.getElementById('rs-erro-usuario');
-  erroEl.style.display = 'none';
-  if(!u) return;
-  if(!sbClient){
-    erroEl.textContent = '⚠ Sem conexão com a nuvem — tente novamente com internet.';
-    erroEl.style.display = 'block';
-    return;
-  }
+  const email = document.getElementById('rs-usuario').value.trim();
+  const msg = document.getElementById('rs-erro-usuario');
+  const mostrar = function(t, ok){ msg.textContent = t; msg.style.color = ok ? '#059669' : '#DC2626'; msg.style.display = 'block'; };
+  if(!email){ mostrar('Informe o e-mail da sua conta.', false); return; }
+  if(!sbClient){ mostrar('Sem conexão com a nuvem.', false); return; }
   const btn = document.getElementById('rs-btn-passo-0');
-  const textoOriginal = btn.textContent;
-  btn.textContent = 'Verificando...';
   btn.disabled = true;
   try{
-    const { data, error } = await sbClient.rpc('obter_pergunta_seguranca', { p_usuario: u });
+    const { error } = await sbClient.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
     if(error) throw error;
-    if(!data){
-      erroEl.textContent = '⚠ Usuário não encontrado.';
-      erroEl.style.display = 'block';
-      return;
-    }
-    usuarioRecuperacao = u;
-    document.getElementById('rs-usuario-texto').textContent = u;
-    const temPergunta = !!(data && data.trim());
-    document.getElementById('rs-pergunta').textContent = temPergunta ? data : '—';
-    document.getElementById('rs-sem-config').style.display = temPergunta ? 'none' : 'block';
-    document.getElementById('rs-resposta').disabled = !temPergunta;
-    document.getElementById('rs-resposta').value = '';
-    irParaPassoRecuperacao(1);
-    setTimeout(()=>document.getElementById('rs-resposta').focus(), 50);
+    // resposta neutra: não revela se o e-mail existe
+    mostrar('Se esse e-mail tiver uma conta, enviamos um link para redefinir a senha. Confira também o spam.', true);
   }catch(e){
-    erroEl.textContent = '⚠ Erro ao verificar: '+descreverErroSupabase(e);
-    erroEl.style.display = 'block';
-  }finally{
-    btn.textContent = textoOriginal;
-    btn.disabled = false;
-  }
+    mostrar('Não foi possível enviar agora: '+descreverErroSupabase(e), false);
+  }finally{ btn.disabled = false; }
 }
-async function verificarRespostaSeguranca(){
-  const resp = document.getElementById('rs-resposta').value.trim();
-  const erroEl = document.getElementById('rs-erro-resposta');
-  if(!resp) return;
-  if(!sbClient){
-    erroEl.textContent = '⚠ Sem conexão com a nuvem — tente novamente com internet.';
-    erroEl.style.display = 'block';
-    return;
-  }
-  const btn = document.getElementById('rs-btn-passo-1');
-  btn.disabled = true;
-  try{
-    const { data, error } = await sbClient.rpc('verificar_resposta_seguranca', { p_usuario: usuarioRecuperacao, p_resposta: resp });
-    if(error) throw error;
-    if(data !== true){
-      erroEl.textContent = '⚠ Resposta incorreta. Tente novamente.';
-      erroEl.style.display = 'block';
-      btn.disabled = false;
-      return;
-    }
-    respostaSegurancaVerificada = resp;
-    erroEl.style.display = 'none';
-    irParaPassoRecuperacao(2);
-    document.getElementById('rs-nova-senha').focus();
-  }catch(e){
-    erroEl.textContent = '⚠ Erro ao verificar: '+descreverErroSupabase(e);
-    erroEl.style.display = 'block';
-  }finally{
-    btn.disabled = false;
-  }
-}
+function voltarIdentificacao(){ irParaPassoRecuperacao(0); }
+async function verificarRespostaSeguranca(){ irParaPassoRecuperacao(0); }
+
+// Passo 2 (aberto pelo link do e-mail): define a nova senha
 async function salvarNovaSenha(){
   const nova = document.getElementById('rs-nova-senha').value;
   const conf = document.getElementById('rs-confirmar-senha').value;
   const erroEl = document.getElementById('rs-erro-senha');
   erroEl.style.display = 'none';
-  if(!nova || nova.length < 4){
-    erroEl.textContent = '⚠ A senha deve ter pelo menos 4 caracteres.';
-    erroEl.style.display = 'block';
-    return;
-  }
-  if(nova !== conf){
-    erroEl.textContent = '⚠ As senhas não coincidem.';
-    erroEl.style.display = 'block';
-    return;
-  }
-  if(!sbClient || !respostaSegurancaVerificada){
-    erroEl.textContent = '⚠ Sem conexão com a nuvem — tente novamente com internet.';
-    erroEl.style.display = 'block';
-    return;
-  }
+  if(nova.length < 8){ erroEl.textContent = '⚠ A senha deve ter pelo menos 8 caracteres.'; erroEl.style.display = 'block'; return; }
+  if(nova !== conf){ erroEl.textContent = '⚠ As senhas não coincidem.'; erroEl.style.display = 'block'; return; }
   try{
-    const { data, error } = await sbClient.rpc('redefinir_senha', { p_usuario: usuarioRecuperacao, p_resposta: respostaSegurancaVerificada, p_nova_senha: nova });
+    const { error } = await sbClient.auth.updateUser({ password: nova });
     if(error) throw error;
-    if(data !== true){
-      erroEl.textContent = '⚠ Não foi possível confirmar sua resposta. Tente o processo novamente.';
-      erroEl.style.display = 'block';
-      return;
-    }
     closeModal('modal-recuperar-senha');
-    document.getElementById('login-user').value = usuarioRecuperacao || '';
-    document.getElementById('login-pw').value = '';
-    document.getElementById('login-pw').focus();
-    const t = document.createElement('div');
-    t.textContent = '✓ Senha alterada! Use a nova senha para entrar.';
-    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#059669;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.2)';
-    document.body.appendChild(t); setTimeout(()=>t.remove(), 4000);
+    alert('Senha alterada com sucesso.');
+    iniciarSessaoAtiva();
   }catch(e){
     erroEl.textContent = '⚠ Erro ao salvar: '+descreverErroSupabase(e);
     erroEl.style.display = 'block';
@@ -5634,17 +5518,16 @@ async function fazerLogin(){
   btn.textContent = 'Verificando...';
   btn.disabled = true;
   try{
-    const { data, error } = await sbClient.rpc('fazer_login', { p_usuario: u, p_senha: p });
-    if(error) throw error;
-    if(data === true){
-      localStorage.setItem('cvi_logado', '1');
-      localStorage.setItem('cvi_usuario_logado', u);
-      document.getElementById('login-screen').style.display = 'none';
-      const irMobile = loginModoMobile;
-      carregarDoSheets();
-      if(irMobile) entrarMobile();
+    const { data, error } = await sbClient.auth.signInWithPassword({ email: u, password: p });
+    if(error){
+      if(/invalid login|credentials/i.test(error.message||'')){ mostrarErro('E-mail ou senha incorretos.'); return; }
+      throw error;
+    }
+    if(data && data.session){
+      limparCacheLocal(); // nunca reaproveitar cache de outra conta
+      iniciarSessaoAtiva();
     } else {
-      mostrarErro('Usuário ou senha incorretos.');
+      mostrarErro('E-mail ou senha incorretos.');
     }
   }catch(e){
     console.error('Erro ao verificar login:', descreverErroSupabase(e), e);
@@ -5655,23 +5538,45 @@ async function fazerLogin(){
   }
 }
 
-function fazerLogout(){
-  localStorage.removeItem('cvi_logado');
-  localStorage.removeItem('cvi_usuario_logado');
-  localStorage.removeItem('cvi_ultimo_modo');
+function limparCacheLocal(){
+  CACHE_KEYS.forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
+}
+function iniciarSessaoAtiva(){
+  document.getElementById('login-screen').style.display = 'none';
+  const irMobile = loginModoMobile || localStorage.getItem('cvi_ultimo_modo') === 'mobile';
+  carregarDoSheets();
+  if(irMobile) entrarMobile();
+}
+
+async function fazerLogout(){
+  try{ if(realtimeChannel){ await sbClient.removeChannel(realtimeChannel); } }catch(e){}
+  realtimeChannel = null;
+  try{ if(sbClient) await sbClient.auth.signOut(); }catch(e){}
+  limparCacheLocal();
+  leads = []; excluidos = []; imoveis = []; visitas = []; tarefas = []; carteiraIds = new Set();
   document.getElementById('mobile-app').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-user').value = '';
   document.getElementById('login-pw').value = '';
+  try{ updateDashboard(); }catch(e){}
 }
 
-// Verifica sessão ao carregar a página
-(function verificarSessao(){
-  if(localStorage.getItem('cvi_logado') === '1'){
-    document.getElementById('login-screen').style.display = 'none';
-    carregarDoSheets();
-    if(localStorage.getItem('cvi_ultimo_modo') === 'mobile') entrarMobile();
-  }
+// Verifica sessão ao carregar a página e reage a eventos de autenticação
+(async function verificarSessao(){
+  if(!sbClient) return;
+  sbClient.auth.onAuthStateChange(function(evento){
+    if(evento === 'PASSWORD_RECOVERY'){
+      // veio do link do e-mail: pede a nova senha
+      document.getElementById('login-screen').style.display = 'none';
+      irParaPassoRecuperacao(2);
+      document.getElementById('rs-btn-passo-2').style.display = 'inline-block';
+      openModal('modal-recuperar-senha');
+    } else if(evento === 'SIGNED_OUT'){
+      document.getElementById('login-screen').style.display = 'flex';
+    }
+  });
+  const uid = await getUid();
+  if(uid && !/type=recovery/.test(location.hash)) iniciarSessaoAtiva();
 })();
 function toggleSenha(){
   const inp = document.getElementById('login-pw');
