@@ -5576,6 +5576,14 @@ async function fazerLogout(){
     }
   });
   const uid = await getUid();
+  // Link de convite (conta criada após o pagamento): a pessoa ainda não tem senha, então pede para definir
+  if(uid && /type=invite/.test(location.hash)){
+    document.getElementById('login-screen').style.display = 'none';
+    irParaPassoRecuperacao(2);
+    document.getElementById('rs-subtitulo').textContent = 'Crie sua senha de acesso';
+    openModal('modal-recuperar-senha');
+    return;
+  }
   if(uid && !/type=recovery/.test(location.hash)) iniciarSessaoAtiva();
 })();
 function toggleSenha(){
